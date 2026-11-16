@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Green Table Market</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><div class="wrap"><div class="brand">🥕 Admin</div>
+<nav><a class="btn" href="/">View public page</a><button id="logout" hidden>Log out</button></nav></div></header>
+<main class="wrap" id="app"></main>
+<script>
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CATS=["Produce","Baked goods","Pantry","Prepared food","Flowers","Crafts","Other"];
+const $=id=>document.getElementById(id), v=id=>$(id).value.trim();
+let vendors=[],site={},editing=null,confirmId=null,msg='',err='';
+async function api(url,method='GET',body){
+  const r=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(r.status===401&&url!=='/api/login')return showLogin();throw new Error(d.error||'Request failed')}
+  return d;
+}
+function showLogin(){
+  $('logout').hidden=true;
+  $('app').innerHTML=`<div class="card login"><h2>Admin login</h2>
+  <label for="u">Username</label><input id="u" autocomplete="username">
+  <label for="p">Password</label><input id="p" type="password" autocomplete="current-password">
+  <div class="err" id="lerr">${esc(err)}</div>
+  <div class="btns"><button class="primary" id="go">Log in</button></div></div>`;
+  const submit=async()=>{try{err='';await api('/api/login','POST',{username:v('u'),password:$('p').value});load()}catch(e){err=e.message;showLogin()}};
+  $('go').onclick=submit;$('p').onkeydown=e=>{if(e.key==='Enter')submit()};
+}
+async function load(){
+  const me=await api('/api/me');if(!me.username)return showLogin();
+  [site,vendors]=await Promise.all([fetch('/api/site').then(r=>r.json()),fetch('/api/vendors').then(r=>r.json())]);
+  $('logout').hidden=false;draw(me.username);
+}
+function draw(user){
+  const e=vendors.find(x=>x.id===editing);
+  $('app').innerHTML=`<section><h2>Dashboard</h2><p class="mute">Signed in as ${esc(user)}</p>
+  <div class="note">${esc(msg)||'Changes are saved immediately and appear on the public page.'}</div><div class="err">${esc(err)}</div></section>
+  <div class="cols">
+  <div class="card"><h3>${e?'Edit vendor':'Add vendor'}</h3>
+  <label for="f-name">Name</label><input id="f-name" maxlength="60" value="${esc(e?e.name:'')}">
+  <label for="f-cat">Category</label><select id="f-cat">${CATS.map(c=>`<option ${e&&e.category===c?'selected':''}>${c}</option>`).join('')}</select>
+  <label for="f-stall">Stall</label><input id="f-stall" maxlength="10" value="${esc(e?e.stall:'')}">
+  <label for="f-desc">Description</label><textarea id="f-desc" rows="3" maxlength="240">${esc(e?e.description:'')}</textarea>
+  <div class="btns"><button class="primary" id="save-v">${e?'Save vendor':'Add vendor'}</button>${e?'<button id="cancel">Cancel</button>':''}</div></div>
+  <div class="card"><h3>Contact information</h3>
+  <label for="c-name">Market name</label><input id="c-name" value="${esc(site.name)}">
+  <label for="c-tag">Tagline</label><textarea id="c-tag" rows="2">${esc(site.tagline)}</textarea>
+  <label for="c-email">Email</label><input id="c-email" type="email" value="${esc(site.email)}">
+  <label for="c-phone">Phone</label><input id="c-phone" value="${esc(site.phone)}">
+  <label for="c-addr">Address</label><input id="c-addr" value="${esc(site.address)}">
+  <label for="c-hours">Hours</label><input id="c-hours" value="${esc(site.hours)}">
+  <div class="btns"><button class="primary" id="save-c">Save contact info</button></div></div></div>
+  <section><h3>Vendors (${vendors.length})</h3><div class="card">${vendors.map(x=>`<div class="row"><div><b>${esc(x.name)}</b> <span class="mute">· ${esc(x.category)} · Stall ${esc(x.stall||'—')}</span></div>
+  <div class="btns" style="margin:0"><button data-edit="${x.id}">Edit</button>${confirmId===x.id?`<button class="danger" data-delok="${x.id}">Confirm delete</button><button id="cancel2">Keep</button>`:`<button class="danger" data-del="${x.id}">Delete</button>`}</div></div>`).join('')||'<p class="mute">No vendors yet.</p>'}</div></section>`;
+  $('save-v').onclick=async()=>{try{
+    const body={name:v('f-name'),category:v('f-cat'),stall:v('f-stall'),description:v('f-desc')};
+    if(editing){await api('/api/vendors/'+editing,'PUT',body);msg='Vendor updated.'}else{await api('/api/vendors','POST',body);msg='Vendor added.'}
+    editing=null;err='';load()}catch(x){err=x.message;load()}};
+  $('save-c').onclick=async()=>{try{
+    await api('/api/site','PUT',{name:v('c-name'),tagline:v('c-tag'),email:v('c-email'),phone:v('c-phone'),address:v('c-addr'),hours:v('c-hours')});
+    msg='Contact info saved.';err='';load()}catch(x){err=x.message;load()}};
+  if($('cancel'))$('cancel').onclick=()=>{editing=null;draw(user)};
+  if($('cancel2'))$('cancel2').onclick=()=>{confirmId=null;draw(user)};
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=+b.dataset.edit;draw(user);scrollTo(0,0)});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{confirmId=+b.dataset.del;draw(user)});
+  document.querySelectorAll('[data-delok]').forEach(b=>b.onclick=async()=>{try{await api('/api/vendors/'+b.dataset.delok,'DELETE');confirmId=null;msg='Vendor deleted.';load()}catch(x){err=x.message;load()}});
+}
+$('logout').onclick=async()=>{await api('/api/logout','POST');msg='';showLogin()};
+load();
+</script>
+</body></html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Green Table Market</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><div class="wrap"><div class="brand">🥕 <span id="brand">Green Table Market</span></div>
+<nav><a class="btn on" href="/">Market</a><a class="btn" href="#contact">Contact</a><a class="btn" href="/admin.html">Admin</a></nav></div></header>
+<main class="wrap">
+<div class="hero"><h1 id="title"></h1><p id="tagline"></p></div>
+<div class="chips" id="chips"></div>
+<div class="grid" id="grid"></div>
+<section id="contact"><h2>Visit &amp; contact</h2><div class="card contact" id="info"></div></section>
+</main>
+<footer><div class="wrap">Full-stack class project · Node.js, Express, SQLite</div></footer>
+<script>
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let vendors=[],filter='All';
+function draw(){
+  const cats=['All',...new Set(vendors.map(v=>v.category))];
+  document.getElementById('chips').innerHTML=cats.map(c=>`<button class="${c===filter?'on':''}" data-c="${esc(c)}">${esc(c)}</button>`).join('');
+  const list=vendors.filter(v=>filter==='All'||v.category===filter);
+  document.getElementById('grid').innerHTML=list.map(v=>`<article class="card"><span class="tag">${esc(v.category)}</span><h3>${esc(v.name)}</h3><p style="margin:0 0 8px">${esc(v.description)}</p><div class="mute">Stall ${esc(v.stall||'—')}</div></article>`).join('')||'<p class="mute">No vendors yet.</p>';
+}
+document.getElementById('chips').addEventListener('click',e=>{const b=e.target.closest('button');if(b){filter=b.dataset.c;draw()}});
+Promise.all([fetch('/api/site').then(r=>r.json()),fetch('/api/vendors').then(r=>r.json())]).then(([site,v])=>{
+  document.title=site.name;
+  document.getElementById('brand').textContent=document.getElementById('title').textContent=site.name;
+  document.getElementById('tagline').textContent=site.tagline;
+  document.getElementById('info').innerHTML=`<div><b>Email</b><a href="mailto:${esc(site.email)}">${esc(site.email)}</a></div><div><b>Phone</b>${esc(site.phone)}</div><div><b>Address</b>${esc(site.address)}</div><div><b>Hours</b>${esc(site.hours)}</div>`;
+  vendors=v;draw();
+});
+</script>
+</body></html>
